@@ -125,13 +125,29 @@ export const createPlanta = async (req: Request, res: Response) => {
 
 export const readAllPlantas = async (req: Request, res: Response) => {
     try {
-        const { luminosidade, petFriendly } = req.query;
+        const { nome, ordem, luminosidade, petFriendly } = req.query;
+
+        if ( nome !== undefined &&
+            (typeof nome !== "string" || nome.trim() === "")) {
+            return res.status(400).json({
+                message: "O nome deve ser um texto não vazio.",
+            });
+
+        }
 
         if (luminosidade !== undefined &&
             (typeof luminosidade !== "string" ||
             !luminosidadesPermitidas.includes(luminosidade))) {
             return res.status(400).json({
                 message: "Luminosidade inválida. Use SOMBRA, MEIA_SOMBRA ou SOL_PLENO.",
+            });
+        }
+
+        if (ordem !== undefined &&
+            ordem !== "preco" &&
+            ordem !== "nome") {
+            return res.status(400).json({
+                message: "Ordenação inválida. Use preco ou nome.",
             });
         }
 
@@ -145,6 +161,13 @@ export const readAllPlantas = async (req: Request, res: Response) => {
 
         const filtros: Prisma.PlantaWhereInput = {};
 
+        if (nome !== undefined) {
+            filtros.nome = {
+                contains: nome.trim(),
+                mode: "insensitive",
+            };
+        }
+
         if (luminosidade !== undefined) {
             filtros.luminosidade = luminosidade as Luminosidade;
         }
@@ -153,7 +176,20 @@ export const readAllPlantas = async (req: Request, res: Response) => {
             filtros.petFriendly = petFriendly === "true";
         }
 
-        const plantas = await PlantaRepository.findAllPlantas(filtros);
+        let ordenacao: Prisma.PlantaOrderByWithRelationInput | undefined;
+
+        if (ordem === "preco") {
+            ordenacao = { preco: "asc" };
+        }
+
+        if (ordem === "nome") {
+            ordenacao = { nome: "asc" };
+        }
+
+        const plantas = await PlantaRepository.findAllPlantas(
+            filtros,
+            ordenacao
+        );
 
         return res.status(200).json(plantas);
 
@@ -343,6 +379,22 @@ export const getInventoryValue = async (req: Request, res: Response) => {
         console.error(error);
         return res.status(500).json({
             message: "Erro ao calcular o valor do estoque.",
+        });
+    }
+};
+
+export const readPlantasEsgotadas = async (req: Request, res: Response) => {
+    try {
+        const plantas = await PlantaRepository.findAllPlantas({
+            estoque: 0,
+        });
+
+        return res.status(200).json(plantas);
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            message: "Erro ao buscar plantas esgotadas.",
         });
     }
 };
